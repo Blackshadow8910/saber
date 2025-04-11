@@ -161,6 +161,8 @@ class EditorState extends State<Editor> {
     Prefs.lastTool.value = tool.toolId;
   }
 
+  bool isDrawing = false;
+
   ValueNotifier<SavingState> savingState = ValueNotifier(SavingState.saved);
   Timer? _delayedSaveTimer;
   Timer? _watchServerTimer;
@@ -543,6 +545,7 @@ class EditorState extends State<Editor> {
     final page = coreInfo.pages[dragPageIndex!];
     final position = page.renderBox!.globalToLocal(details.focalPoint);
     history.canRedo = false;
+    isDrawing = true;
 
     final bool shouldPlayPencilSound;
 
@@ -630,6 +633,7 @@ class EditorState extends State<Editor> {
 
   void onDrawEnd(ScaleEndDetails details) {
     final page = coreInfo.pages[dragPageIndex!];
+    isDrawing = false;
     bool shouldSave = true;
     if (PencilSound.isPlaying) PencilSound.pause();
     setState(() {
@@ -730,7 +734,7 @@ class EditorState extends State<Editor> {
     // whether the stylus button is or was pressed
     stylusButtonPressed = stylusButtonPressed || buttonPressed;
 
-    if (isHovering) {
+    if (isHovering && !isDrawing) {
       if (buttonPressed) {
         if (currentTool is Eraser) return;
         tmpTool = currentTool;
