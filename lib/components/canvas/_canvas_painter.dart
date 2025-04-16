@@ -178,6 +178,9 @@ class CanvasPainter extends CustomPainter {
       canvas.drawCircle(bounds.center, radius, paint);
     } else {
       // Current stroke always uses high quality
+      paint.strokeWidth = 1.0;
+      // paint.style = PaintingStyle.stroke;
+      // canvas.drawPath(currentStroke!.getPointPath(), paint);
       canvas.drawPath(currentStroke!.highQualityPath, paint);
     }
   }

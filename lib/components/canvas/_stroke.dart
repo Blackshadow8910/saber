@@ -13,6 +13,8 @@ import 'package:saber/data/extensions/list_extensions.dart';
 import 'package:saber/data/extensions/point_extensions.dart';
 import 'package:saber/data/tools/pen.dart';
 
+import 'package:saber/components/canvas/custom_get_stroke.dart';
+
 class Stroke {
   static final log = Logger('Stroke');
 
@@ -181,12 +183,14 @@ class Stroke {
   void optimisePoints({double thresholdMultiplier = _optimisePointsThreshold}) {
     if (points.length <= 3) return;
 
-    final minDistance = options.size * thresholdMultiplier;
+    int skipEnd = 5;
+
+    final minDistance = options.size * thresholdMultiplier * 1.0;
 
     // Remove points with null pressure because they were duplicates
     points.removeWhere((point) => point.pressure == null);
 
-    for (int i = 1; i < points.length - 1; i++) {
+    for (int i = 1; i < points.length - 1 - skipEnd; i++) {
       final point = points[i];
       final prev = points[i - 1];
       final next = points[i + 1];
@@ -196,6 +200,11 @@ class Stroke {
         points.removeAt(i);
         i--;
       }
+    }
+
+    if (points[points.length - 1].distanceSquaredTo(points[points.length - 2]) <
+        minDistance * minDistance) {
+      points.removeAt(points.length - 2);
     }
   }
 
@@ -207,7 +216,11 @@ class Stroke {
     final rememberSimulatedPressure =
         N <= 1 && options.simulatePressure && options.isComplete;
 
-    final polygon = getStroke(
+    options.streamline = 0.0;
+    options.smoothing = 0.0;
+    options;
+    optimisePoints();
+    final polygon = getStrokeCustom(
       skipPoints(points, N),
       options: options,
       rememberSimulatedPressure: rememberSimulatedPressure,
@@ -249,6 +262,10 @@ class Stroke {
     ];
   }
 
+  Path getPointPath() {
+    return Path()..addPolygon(points, false);
+  }
+
   static Path smoothPathFromPolygon(List<Offset> polygon) {
     final path = Path();
     path.moveTo(polygon.first.dx, polygon.first.dy);
@@ -257,6 +274,7 @@ class Stroke {
       final p2 = polygon[i + 1];
       final mid = (p1 + p2) / 2;
       path.quadraticBezierTo(p1.dx, p1.dy, mid.dx, mid.dy);
+      // path.lineTo(p2.dx, p2.dy);
     }
     return path..close();
   }

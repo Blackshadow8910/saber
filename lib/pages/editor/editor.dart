@@ -614,11 +614,13 @@ class EditorState extends State<Editor> {
       if (select.doneSelecting) {
         for (Stroke stroke in select.selectResult.strokes) {
           stroke.shift(offset);
+          stroke.markPolygonNeedsUpdating();
         }
         for (EditorImage image in select.selectResult.images) {
           image.dstRect = image.dstRect.shift(offset);
         }
         select.selectResult.path = select.selectResult.path.shift(offset);
+        page.redrawStrokes();
       } else {
         select.onDragUpdate(position);
       }
