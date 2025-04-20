@@ -227,7 +227,6 @@ class EditorPage extends Listenable implements HasSize {
               map,
               fileVersion: fileVersion,
               pageIndex: pageIndex,
-              page: page,
             );
           })
           .where((element) => element != null)

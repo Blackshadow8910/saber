@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:perfect_freehand/perfect_freehand.dart';
 import 'package:saber/components/canvas/_stroke.dart';
-import 'package:saber/data/editor/page.dart';
+import 'package:saber/data/editor/editor_history.dart';
 import 'package:saber/data/prefs.dart';
 import 'package:saber/data/tools/_tool.dart';
 import 'package:saber/data/tools/highlighter.dart';
 import 'package:saber/data/tools/pencil.dart';
+import 'package:saber/data/tools/shape_pen.dart';
 import 'package:saber/i18n/strings.g.dart';
+import 'package:saber/pages/editor/editor_controller.dart';
 
 class Pen extends Tool {
   @protected
@@ -72,30 +74,53 @@ class Pen extends Tool {
     _currentPen = currentPen;
   }
 
-  void onDragStart(
-      Offset position, EditorPage page, int pageIndex, double? pressure) {
+  @override
+  void onDragStart(DragData data, EditorController controller) {
     currentStroke = Stroke(
       color: color,
       pressureEnabled: pressureEnabled,
       options: options.copyWith(
         isComplete: false,
       ),
-      pageIndex: pageIndex,
-      page: page,
+      pageIndex: data.pageIndex,
       penType: runtimeType.toString(),
     );
-    onDragUpdate(position, pressure);
+    onDragUpdate(data, controller);
+    controller.setPencilSound(true);
   }
 
-  void onDragUpdate(Offset position, double? pressure) {
-    currentStroke!.addPoint(position, pressure);
+  @override
+  void onDragUpdate(DragData data, EditorController controller) {
+    currentStroke!.addPoint(data.position, data.pressure);
+    controller.redrawStrokes(data.pageIndex);
   }
 
-  Stroke onDragEnd() {
+  @override
+  Stroke onDragEnd(DragData data, EditorController controller) {
     final Stroke stroke = currentStroke!
       ..options.isComplete = true
       ..markPolygonNeedsUpdating();
     currentStroke = null;
+    controller.setPencilSound(false);
+
+    if (!stroke.isEmpty) {
+      if (Prefs.autoStraightenLines.value &&
+          this is! ShapePen &&
+          stroke.isStraightLine()) {
+        stroke.convertToLine();
+      }
+
+      controller.addStroke(stroke);
+      controller.recordChange(EditorHistoryItem(
+        type: EditorHistoryItemType.draw,
+        pageIndex: data.pageIndex,
+        strokes: [stroke],
+        images: [],
+      ));
+      controller.autosaveAfterDelay();
+      controller.markNeedsRepaint();
+    }
+
     return stroke;
   }
 
@@ -119,4 +144,6 @@ class Pen extends Tool {
         start: StrokeEndOptions.start(taperEnabled: true, customTaper: 1),
         end: StrokeEndOptions.end(taperEnabled: true, customTaper: 1),
       );
+
+  get dragPageIndex => null;
 }

@@ -14,7 +14,6 @@ class RectangleStroke extends Stroke {
     required super.pressureEnabled,
     required super.options,
     required super.pageIndex,
-    required super.page,
     required super.penType,
     required this.rect,
   }) {
@@ -25,7 +24,6 @@ class RectangleStroke extends Stroke {
     Map<String, dynamic> json, {
     required int fileVersion,
     required int pageIndex,
-    required HasSize page,
   }) {
     assert(json['shape'] == 'rect');
     assert(json['i'] == pageIndex || json['i'] == null);
@@ -48,7 +46,6 @@ class RectangleStroke extends Stroke {
       pressureEnabled: json['pe'] ?? Stroke.defaultPressureEnabled,
       options: StrokeOptions.fromJson(json),
       pageIndex: pageIndex,
-      page: page,
       penType: json['ty'] ?? (ShapePen).toString(),
       rect: Rect.fromLTWH(
         json['rl'] ?? 0,
@@ -118,7 +115,7 @@ class RectangleStroke extends Stroke {
   }
 
   @override
-  String toSvgPath() {
+  String toSvgPath(HasSize page) {
     return 'M${rect.left},${rect.top} '
         'L${rect.right},${rect.top} '
         'L${rect.right},${rect.bottom} '
@@ -158,7 +155,6 @@ class RectangleStroke extends Stroke {
         pressureEnabled: pressureEnabled,
         options: options.copyWith(),
         pageIndex: pageIndex,
-        page: page,
         penType: penType,
         rect: rect,
       );

@@ -11,6 +11,7 @@ import 'package:saber/data/prefs.dart';
 import 'package:saber/data/tools/_tool.dart';
 import 'package:saber/data/tools/pen.dart';
 import 'package:saber/i18n/strings.g.dart';
+import 'package:saber/pages/editor/editor_controller.dart';
 
 class ShapePen extends Pen {
   ShapePen()
@@ -48,8 +49,8 @@ class ShapePen extends Pen {
   }
 
   @override
-  void onDragUpdate(Offset position, double? pressure) {
-    super.onDragUpdate(position, pressure);
+  void onDragUpdate(DragData data, EditorController controller) {
+    super.onDragUpdate(data, controller);
 
     if (_detectShapeDebouncer == null || !_detectShapeDebouncer!.isActive) {
       _detectShapeDebouncer = Timer(debounceDuration, _detectShape);
@@ -57,12 +58,12 @@ class ShapePen extends Pen {
   }
 
   @override
-  Stroke onDragEnd() {
+  Stroke onDragEnd(DragData data, EditorController controller) {
     _detectShapeDebouncer?.cancel();
     _detectShapeDebouncer = null;
     _detectShape();
 
-    final rawStroke = super.onDragEnd();
+    final rawStroke = super.onDragEnd(data, controller);
     assert(rawStroke.options.isComplete == true);
 
     final detectedShape = ShapePen.detectedShape;
@@ -85,7 +86,6 @@ class ShapePen extends Pen {
           pressureEnabled: pressureEnabled,
           options: rawStroke.options,
           pageIndex: rawStroke.pageIndex,
-          page: rawStroke.page,
           penType: rawStroke.penType,
           rect: rect,
         );
@@ -97,7 +97,6 @@ class ShapePen extends Pen {
           pressureEnabled: pressureEnabled,
           options: rawStroke.options,
           pageIndex: rawStroke.pageIndex,
-          page: rawStroke.page,
           penType: rawStroke.penType,
           radius: radius,
           center: center,
@@ -111,7 +110,6 @@ class ShapePen extends Pen {
           pressureEnabled: pressureEnabled,
           options: rawStroke.options,
           pageIndex: rawStroke.pageIndex,
-          page: rawStroke.page,
           penType: rawStroke.penType,
         )..addPoints(polygon);
     }

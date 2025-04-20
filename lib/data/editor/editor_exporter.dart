@@ -124,7 +124,7 @@ abstract class EditorExporter {
                       );
                     } else {
                       shouldFillShape = true;
-                      pdfGraphics.drawShape(stroke.toSvgPath());
+                      pdfGraphics.drawShape(stroke.toSvgPath(page));
                     }
 
                     if (shouldFillShape) {

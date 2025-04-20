@@ -47,6 +47,7 @@ import 'package:saber/data/tools/pencil.dart';
 import 'package:saber/data/tools/select.dart';
 import 'package:saber/data/tools/shape_pen.dart';
 import 'package:saber/i18n/strings.g.dart';
+import 'package:saber/pages/editor/editor_controller.dart';
 import 'package:saber/pages/home/whiteboard.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:super_clipboard/super_clipboard.dart';
@@ -102,6 +103,8 @@ class EditorState extends State<Editor> {
   final log = Logger('EditorState');
 
   late EditorCoreInfo coreInfo = EditorCoreInfo(filePath: '');
+
+  late EditorController controller = EditorController(this);
 
   final _canvasGestureDetectorKey = GlobalKey<CanvasGestureDetectorState>();
   final _transformationController = TransformationController();
@@ -181,7 +184,7 @@ class EditorState extends State<Editor> {
 
   @override
   void initState() {
-    DynamicMaterialApp.addFullscreenListener(_setState);
+    DynamicMaterialApp.addFullscreenListener(markNeedsRepaint);
 
     _initAsync();
     _assignKeybindings();
@@ -259,7 +262,7 @@ class EditorState extends State<Editor> {
     }
   }
 
-  void _setState() => setState(() {});
+  void markNeedsRepaint() => setState(() {});
 
   Keybinding? _ctrlZ, _ctrlY, _ctrlShiftZ;
   void _assignKeybindings() {
@@ -352,21 +355,21 @@ class EditorState extends State<Editor> {
       switch (item!.type) {
         case EditorHistoryItemType.draw:
           for (Stroke stroke in item.strokes) {
-            coreInfo.pages[stroke.pageIndex].strokes.remove(stroke);
+            coreInfo.pages[item.pageIndex].strokes.remove(stroke);
           }
           for (EditorImage image in item.images) {
-            coreInfo.pages[image.pageIndex].images.remove(image);
+            coreInfo.pages[item.pageIndex].images.remove(image);
           }
           removeExcessPages();
 
         case EditorHistoryItemType.erase:
           for (Stroke stroke in item.strokes) {
-            createPage(stroke.pageIndex);
-            coreInfo.pages[stroke.pageIndex].insertStroke(stroke);
+            createPage(item.pageIndex);
+            coreInfo.pages[item.pageIndex].insertStroke(stroke);
           }
           for (EditorImage image in item.images) {
-            createPage(image.pageIndex);
-            coreInfo.pages[image.pageIndex].images.add(image);
+            createPage(item.pageIndex);
+            coreInfo.pages[item.pageIndex].images.add(image);
             image.newImage = true;
           }
 
@@ -547,39 +550,10 @@ class EditorState extends State<Editor> {
     history.canRedo = false;
     isDrawing = true;
 
-    final bool shouldPlayPencilSound;
+    final DragData data = DragData(position, Offset.zero, dragPageIndex!,
+        pressure: currentPressure);
 
-    if (currentTool is Pen) {
-      shouldPlayPencilSound = true;
-      (currentTool as Pen)
-          .onDragStart(position, page, dragPageIndex!, currentPressure);
-    } else if (currentTool is Eraser) {
-      shouldPlayPencilSound = true;
-      for (Stroke stroke in (currentTool as Eraser)
-          .checkForOverlappingStrokes(position, page.strokes)) {
-        page.strokes.remove(stroke);
-      }
-      removeExcessPages();
-    } else if (currentTool is Select) {
-      shouldPlayPencilSound = false;
-      Select select = currentTool as Select;
-      if (select.doneSelecting &&
-          select.selectResult.pageIndex == dragPageIndex! &&
-          select.selectResult.path.contains(position)) {
-        // drag selection in onDrawUpdate
-      } else {
-        select.onDragStart(position, dragPageIndex!);
-        history.canRedo = true; // selection doesn't affect history
-      }
-    } else if (currentTool is LaserPointer) {
-      shouldPlayPencilSound = true;
-      (currentTool as LaserPointer).onDragStart(position, page, dragPageIndex!);
-    } else {
-      shouldPlayPencilSound = false;
-    }
-
-    if (Prefs.pencilSound.value != PencilSoundSetting.off &&
-        shouldPlayPencilSound) PencilSound.resume();
+    currentTool.onDragStart(data, controller);
 
     previousPosition = position;
     moveOffset = Offset.zero;
@@ -597,117 +571,38 @@ class EditorState extends State<Editor> {
     final position = page.renderBox!.globalToLocal(details.focalPoint);
     final offset = position - previousPosition;
 
+    final DragData data =
+        DragData(position, offset, dragPageIndex!, pressure: currentPressure);
+
     if (PencilSound.isPlaying) PencilSound.update(offset.distance);
 
-    if (currentTool is Pen) {
-      (currentTool as Pen).onDragUpdate(position, currentPressure);
-      page.redrawStrokes();
-    } else if (currentTool is Eraser) {
-      for (Stroke stroke in (currentTool as Eraser)
-          .checkForOverlappingStrokes(position, page.strokes)) {
-        page.strokes.remove(stroke);
-      }
-      page.redrawStrokes();
-      removeExcessPages();
-    } else if (currentTool is Select) {
-      Select select = currentTool as Select;
-      if (select.doneSelecting) {
-        for (Stroke stroke in select.selectResult.strokes) {
-          stroke.shift(offset);
-        }
-        for (EditorImage image in select.selectResult.images) {
-          image.dstRect = image.dstRect.shift(offset);
-        }
-        select.selectResult.path = select.selectResult.path.shift(offset);
-      } else {
-        select.onDragUpdate(position);
-      }
-      page.redrawStrokes();
-    } else if (currentTool is LaserPointer) {
-      (currentTool as LaserPointer).onDragUpdate(position);
-      page.redrawStrokes();
-    }
+    currentTool.onDragUpdate(data, controller);
+
     previousPosition = position;
     moveOffset += offset;
   }
 
   void onDrawEnd(ScaleEndDetails details) {
-    final page = coreInfo.pages[dragPageIndex!];
+    final position = previousPosition;
+    final offset = moveOffset;
+
     isDrawing = false;
-    bool shouldSave = true;
+    DragData data =
+        DragData(position, offset, dragPageIndex!, pressure: currentPressure);
     if (PencilSound.isPlaying) PencilSound.pause();
-    setState(() {
-      if (currentTool is Pen) {
-        Stroke newStroke = (currentTool as Pen).onDragEnd();
-        if (newStroke.isEmpty) return;
 
-        if (Prefs.autoStraightenLines.value &&
-            currentTool is! ShapePen &&
-            newStroke.isStraightLine()) {
-          newStroke.convertToLine();
-        }
-
-        createPage(newStroke.pageIndex);
-        page.insertStroke(newStroke);
-        history.recordChange(EditorHistoryItem(
-          type: EditorHistoryItemType.draw,
-          pageIndex: dragPageIndex!,
-          strokes: [newStroke],
-          images: [],
-        ));
-      } else if (currentTool is Eraser) {
-        final erased = (currentTool as Eraser).onDragEnd();
-        if (tmpTool != null &&
-            (stylusButtonPressed || Prefs.disableEraserAfterUse.value)) {
-          // restore previous tool
-          stylusButtonPressed = false;
-          currentTool = tmpTool!;
-          tmpTool = null;
-        }
-        if (erased.isEmpty) return;
-        history.recordChange(EditorHistoryItem(
-          type: EditorHistoryItemType.erase,
-          pageIndex: dragPageIndex!,
-          strokes: erased,
-          images: [],
-        ));
-      } else if (currentTool is Select) {
-        if (moveOffset == Offset.zero) return;
-        Select select = currentTool as Select;
-        if (select.doneSelecting) {
-          history.recordChange(EditorHistoryItem(
-            type: EditorHistoryItemType.move,
-            pageIndex: dragPageIndex!,
-            strokes: select.selectResult.strokes,
-            images: select.selectResult.images,
-            offset: Rect.fromLTRB(
-              moveOffset.dx,
-              moveOffset.dy,
-              moveOffset.dx,
-              moveOffset.dy,
-            ),
-          ));
-        } else {
-          shouldSave = false;
-          select.onDragEnd(page.strokes, page.images);
-
-          if (select.selectResult.isEmpty) {
-            Select.currentSelect.unselect();
-          }
-        }
-      } else if (currentTool is LaserPointer) {
-        shouldSave = false;
-        final newStroke = (currentTool as LaserPointer).onDragEnd(
-          page.redrawStrokes,
-          (Stroke stroke) {
-            page.laserStrokes.remove(stroke);
-          },
-        );
-        page.laserStrokes.add(newStroke);
+    if (currentTool is Eraser) {
+      (currentTool as Eraser).onDragEnd(data, controller);
+      if (tmpTool != null &&
+          (stylusButtonPressed || Prefs.disableEraserAfterUse.value)) {
+        // restore previous tool
+        stylusButtonPressed = false;
+        currentTool = tmpTool!;
+        tmpTool = null;
       }
-    });
-
-    if (shouldSave) autosaveAfterDelay();
+    } else {
+      currentTool.onDragEnd(data, controller);
+    }
   }
 
   void onInteractionEnd(ScaleEndDetails details) {
@@ -2036,7 +1931,7 @@ class EditorState extends State<Editor> {
       await saveToFile();
     })();
 
-    DynamicMaterialApp.removeFullscreenListener(_setState);
+    DynamicMaterialApp.removeFullscreenListener(markNeedsRepaint);
 
     _delayedSaveTimer?.cancel();
     _watchServerTimer?.cancel();

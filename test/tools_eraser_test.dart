@@ -1,11 +1,11 @@
 import 'dart:math';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:perfect_freehand/perfect_freehand.dart';
 import 'package:saber/components/canvas/_stroke.dart';
-import 'package:saber/data/editor/page.dart';
+import 'package:saber/data/tools/_tool.dart';
 import 'package:saber/data/tools/eraser.dart';
+import 'package:saber/pages/editor/editor.dart';
 
 const String _penType = 'testing pen';
 final StrokeOptions _options = StrokeOptions(
@@ -54,8 +54,12 @@ void main() {
     ];
 
     List<Stroke> strokes = [...strokesToErase, ...strokesToKeep];
-    List<Stroke> erased =
-        eraser.checkForOverlappingStrokes(_eraserPos, strokes);
+
+    DragData drag = DragData(_eraserPos, Offset.zero, 0);
+    EditorState state = EditorState();
+    strokes.forEach(state.controller.addStroke);
+
+    List<Stroke> erased = eraser.overlappingStrokes(_eraserPos, strokes);
 
     for (Stroke stroke in strokesToErase) {
       expect(erased.contains(stroke), true,
@@ -67,7 +71,9 @@ void main() {
           reason: 'Stroke should not be erased: $stroke');
     }
 
-    List<Stroke> erasedStrokes = eraser.onDragEnd();
+    eraser.onDragStart(drag, state.controller);
+    List<Stroke> erasedStrokes = eraser.onDragEnd(drag, state.controller);
+
     expect(erasedStrokes.length, strokesToErase.length,
         reason: 'The correct number of strokes should have been erased');
     expect(
@@ -81,6 +87,5 @@ Stroke _strokeWithPoint(Offset point) => Stroke(
       pressureEnabled: Stroke.defaultPressureEnabled,
       options: _options,
       pageIndex: 0,
-      page: const HasSize(Size(100, 100)),
       penType: _penType,
     )..addPoint(point);

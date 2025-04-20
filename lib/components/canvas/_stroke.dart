@@ -24,7 +24,6 @@ class Stroke {
   int get length => points.length;
 
   int pageIndex;
-  HasSize page;
   final String penType;
 
   static const defaultColor = Colors.black;
@@ -65,7 +64,6 @@ class Stroke {
     required this.pressureEnabled,
     required this.options,
     required this.pageIndex,
-    required this.page,
     required this.penType,
   });
 
@@ -73,7 +71,6 @@ class Stroke {
     Map<String, dynamic> json, {
     required int fileVersion,
     required int pageIndex,
-    required HasSize page,
   }) {
     assert(json['i'] == pageIndex || json['i'] == null);
     switch (json['shape'] as String?) {
@@ -81,10 +78,10 @@ class Stroke {
         break;
       case 'circle':
         return CircleStroke.fromJson(json,
-            fileVersion: fileVersion, pageIndex: pageIndex, page: page);
+            fileVersion: fileVersion, pageIndex: pageIndex);
       case 'rect':
         return RectangleStroke.fromJson(json,
-            fileVersion: fileVersion, pageIndex: pageIndex, page: page);
+            fileVersion: fileVersion, pageIndex: pageIndex);
       default:
         log.severe('Unknown shape: ${json['shape']}');
     }
@@ -126,7 +123,6 @@ class Stroke {
       pressureEnabled: pressureEnabled,
       options: options,
       pageIndex: pageIndex,
-      page: page,
       penType: json['ty'] ?? (Pen).toString(),
     )..points.addAll(points);
   }
@@ -261,7 +257,7 @@ class Stroke {
     return path..close();
   }
 
-  String toSvgPath() {
+  String toSvgPath(HasSize page) {
     String toSvgPoint(Offset point) {
       return '${point.dx} '
           '${page.size.height - point.dy}';
@@ -365,7 +361,6 @@ class Stroke {
         pressureEnabled: pressureEnabled,
         options: options.copyWith(),
         pageIndex: pageIndex,
-        page: page,
         penType: penType,
       )..points.addAll(points);
 }

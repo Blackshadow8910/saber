@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:perfect_freehand/perfect_freehand.dart';
 import 'package:saber/components/canvas/_stroke.dart';
-import 'package:saber/data/editor/page.dart';
 import 'package:saber/data/extensions/list_extensions.dart';
 import 'package:saber/data/tools/_tool.dart';
 import 'package:saber/data/tools/pen.dart';
+import 'package:saber/pages/editor/editor_controller.dart';
 
 class LaserPointer extends Tool {
   LaserPointer._();
@@ -36,45 +36,51 @@ class LaserPointer extends Tool {
   /// has finished drawing.
   static bool isDrawing = false;
 
-  void onDragStart(Offset position, EditorPage page, int pageIndex) {
+  @override
+  void onDragStart(DragData data, EditorController controller) {
     isDrawing = true;
+    controller.setPencilSound(true);
     Pen.currentStroke = LaserStroke(
       color: outerColor,
       pressureEnabled: pressureEnabled,
       options: options.copyWith(),
-      pageIndex: pageIndex,
-      page: page,
+      pageIndex: data.pageIndex,
       penType: runtimeType.toString(),
     );
 
     strokePointDelays = [];
     _stopwatch.reset();
-    onDragUpdate(position);
+    onDragUpdate(data, controller);
     _stopwatch.start();
   }
 
-  void onDragUpdate(Offset position) {
+  @override
+  void onDragUpdate(DragData data, EditorController controller) {
     isDrawing = true;
-    Pen.currentStroke?.addPoint(position);
+    Pen.currentStroke?.addPoint(data.position);
     strokePointDelays.add(_stopwatch.elapsed);
     _stopwatch.reset();
+    controller.redrawStrokes(data.pageIndex);
   }
 
-  LaserStroke onDragEnd(
-      VoidCallback redrawPage, void Function(Stroke) deleteStroke) {
+  @override
+  LaserStroke onDragEnd(DragData data, EditorController controller) {
     isDrawing = false;
+    final stroke = (Pen.currentStroke! as LaserStroke);
 
     fadeOutStroke(
-      stroke: Pen.currentStroke!,
+      stroke: stroke,
       strokePointDelays: strokePointDelays,
-      redrawPage: redrawPage,
-      deleteStroke: deleteStroke,
+      redrawPage: () => {controller.redrawStrokes(stroke.pageIndex)},
+      deleteStroke: controller.removeStroke,
     );
-
-    final stroke = (Pen.currentStroke! as LaserStroke)
+    stroke
       ..options.isComplete = true
       ..markPolygonNeedsUpdating();
     Pen.currentStroke = null;
+
+    controller.addStroke(stroke);
+    controller.redrawStrokes(data.pageIndex);
     return stroke;
   }
 
@@ -114,7 +120,6 @@ class LaserStroke extends Stroke {
     required super.pressureEnabled,
     required super.options,
     required super.pageIndex,
-    required EditorPage super.page,
     required super.penType,
   });
   @visibleForTesting
@@ -126,7 +131,6 @@ class LaserStroke extends Stroke {
             ..streamline = 0.7
             ..smoothing = 0.7,
           pageIndex: stroke.pageIndex,
-          page: stroke.page,
           penType: stroke.penType,
         ) {
     points.addAll(stroke.points);

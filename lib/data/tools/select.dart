@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:saber/components/canvas/_stroke.dart';
 import 'package:saber/components/canvas/image/editor_image.dart';
+import 'package:saber/data/editor/editor_history.dart';
 import 'package:saber/data/tools/_tool.dart';
+import 'package:saber/pages/editor/editor_controller.dart';
 
 class Select extends Tool {
   Select._();
@@ -48,44 +50,95 @@ class Select extends Tool {
     }).key;
   }
 
-  void onDragStart(Offset position, int pageIndex) {
-    doneSelecting = false;
-    selectResult = SelectResult(
-      pageIndex: pageIndex,
-      strokes: [],
-      images: [],
-      path: Path(),
-    );
-    selectResult.path.moveTo(position.dx, position.dy);
-    onDragUpdate(position);
+  @override
+  void onDragStart(DragData data, EditorController controller) {
+    if (doneSelecting &&
+        selectResult.pageIndex == data.pageIndex &&
+        selectResult.path.contains(data.position)) {
+      // Move selection in onDrawUpdate
+    } else {
+      doneSelecting = false;
+      selectResult = SelectResult(
+        pageIndex: data.pageIndex,
+        strokes: [],
+        images: [],
+        path: Path(),
+      );
+      selectResult.path.moveTo(data.position.dx, data.position.dy);
+    }
   }
 
-  void onDragUpdate(Offset position) {
-    selectResult.path.lineTo(position.dx, position.dy);
+  @override
+  void onDragUpdate(DragData data, EditorController controller) {
+    if (doneSelecting) {
+      // Move
+      for (Stroke stroke in selectResult.strokes) {
+        stroke.shift(data.offset);
+      }
+      for (EditorImage image in selectResult.images) {
+        image.dstRect = image.dstRect.shift(data.offset);
+      }
+      selectResult.path = selectResult.path.shift(data.offset);
+    } else {
+      // Select
+      selectResult.path.lineTo(data.position.dx, data.position.dy);
+    }
+
+    controller.redrawStrokes(data.pageIndex);
   }
 
   /// Adds the indices of any [strokes] that are inside the selection area
-  /// to [selectResult.indices].
-  void onDragEnd(List<Stroke> strokes, List<EditorImage> images) {
-    selectResult.path.close();
-    doneSelecting = true;
+  /// to [selectResult.indices], or moves the selection if done.
+  @override
+  void onDragEnd(DragData data, EditorController controller) {
+    if (data.offset == Offset.zero) return;
 
-    for (int i = 0; i < strokes.length; i++) {
-      final stroke = strokes[i];
-      final percentInside =
-          polygonPercentInside(selectResult.path, stroke.lowQualityPolygon);
-      if (percentInside > minPercentInside) {
-        selectResult.strokes.add(stroke);
+    if (doneSelecting) {
+      // Move
+      controller.recordChange(EditorHistoryItem(
+        type: EditorHistoryItemType.move,
+        pageIndex: data.pageIndex,
+        strokes: selectResult.strokes,
+        images: selectResult.images,
+        offset: Rect.fromLTRB(
+          data.offset.dx,
+          data.offset.dy,
+          data.offset.dx,
+          data.offset.dy,
+        ),
+      ));
+      controller.autosaveAfterDelay();
+    } else {
+      // Select
+      selectResult.path.close();
+      doneSelecting = true;
+
+      final page = controller.getPage(data.pageIndex);
+
+      for (int i = 0; i < page.strokes.length; i++) {
+        final stroke = page.strokes[i];
+        final percentInside =
+            polygonPercentInside(selectResult.path, stroke.lowQualityPolygon);
+        if (percentInside > minPercentInside) {
+          selectResult.strokes.add(stroke);
+        }
+      }
+
+      for (int i = 0; i < page.images.length; i++) {
+        final image = page.images[i];
+        final percentInside =
+            rectPercentInside(selectResult.path, image.dstRect);
+        if (percentInside >= minPercentInside) {
+          selectResult.images.add(image);
+        }
+      }
+
+      if (selectResult.isEmpty) {
+        Select.currentSelect.unselect();
       }
     }
 
-    for (int i = 0; i < images.length; i++) {
-      final image = images[i];
-      final percentInside = rectPercentInside(selectResult.path, image.dstRect);
-      if (percentInside >= minPercentInside) {
-        selectResult.images.add(image);
-      }
-    }
+    controller.markNeedsRepaint();
   }
 
   static double rectPercentInside(Path selection, Rect rect) {

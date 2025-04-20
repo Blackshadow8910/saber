@@ -5,6 +5,7 @@ import 'package:saber/components/canvas/_stroke.dart';
 import 'package:saber/data/editor/page.dart';
 
 const _pageSize = Size(100, 100);
+const _testPage = HasSize(_pageSize);
 const _penSize = 1.0;
 
 void main() {
@@ -30,12 +31,11 @@ Stroke _stroke(Offset point) => Stroke(
         size: _penSize,
       ),
       pageIndex: 0,
-      page: const HasSize(_pageSize),
       penType: 'testingPen',
     )..addPoint(point);
 
 void _testStrokeSvg(Stroke stroke) {
-  final svgPath = stroke.toSvgPath();
+  final svgPath = stroke.toSvgPath(_testPage);
   final svgPoints = svgPath
       .split(RegExp(r'[ML]'))
       .where((e) => e.isNotEmpty)

@@ -17,7 +17,6 @@ class CircleStroke extends Stroke {
     required super.pressureEnabled,
     required super.options,
     required super.pageIndex,
-    required super.page,
     required super.penType,
     required this.center,
     required this.radius,
@@ -29,7 +28,6 @@ class CircleStroke extends Stroke {
     Map<String, dynamic> json, {
     required int fileVersion,
     required int pageIndex,
-    required HasSize page,
   }) {
     assert(json['shape'] == 'circle');
     assert(json['i'] == pageIndex || json['i'] == null);
@@ -52,7 +50,6 @@ class CircleStroke extends Stroke {
       pressureEnabled: json['pe'] ?? Stroke.defaultPressureEnabled,
       options: StrokeOptions.fromJson(json),
       pageIndex: pageIndex,
-      page: page,
       penType: json['ty'] ?? (ShapePen).toString(),
       center: Offset(
         json['cx'] ?? 0,
@@ -113,7 +110,7 @@ class CircleStroke extends Stroke {
   }
 
   @override
-  String toSvgPath() {
+  String toSvgPath(HasSize page) {
     return 'M${center.dx},${center.dy} m${-radius},0 a$radius,$radius 0 1,0 ${radius * 2},0 a$radius,$radius 0 1,0 ${-radius * 2},0';
   }
 
@@ -149,7 +146,6 @@ class CircleStroke extends Stroke {
         pressureEnabled: pressureEnabled,
         options: options.copyWith(),
         pageIndex: pageIndex,
-        page: page,
         penType: penType,
         center: center,
         radius: radius,
